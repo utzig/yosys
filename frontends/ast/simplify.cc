@@ -26,6 +26,7 @@
  *
  */
 
+#include <emscripten.h>
 #include "kernel/log.h"
 #include "libs/sha1/sha1.h"
 #include "frontends/verilog/verilog_frontend.h"
@@ -51,6 +52,10 @@ bool AstNode::simplify(bool const_fold, bool at_zero, bool in_lvalue, int stage,
 {
 	AstNode *newNode = NULL;
 	bool did_something = false;
+	static int recursion_counter = 0;
+
+	recursion_counter++;
+	log("AST simplify[%d] depth %d at %s:%d.\n", stage, recursion_counter, filename.c_str(), linenum);
 
 #if 0
 	log("-------------\n");
@@ -143,6 +148,7 @@ bool AstNode::simplify(bool const_fold, bool at_zero, bool in_lvalue, int stage,
 		}
 
 		while (simplify(const_fold, at_zero, in_lvalue, 2, width_hint, sign_hint, in_param)) { }
+		recursion_counter--;
 		return false;
 	}
 
@@ -151,8 +157,10 @@ bool AstNode::simplify(bool const_fold, bool at_zero, bool in_lvalue, int stage,
 
 	// we do not look inside a task or function
 	// (but as soon as a task of function is instanciated we process the generated AST as usual)
-	if (type == AST_FUNCTION || type == AST_TASK)
+	if (type == AST_FUNCTION || type == AST_TASK) {
+		recursion_counter--;
 		return false;
+	}
 
 	// deactivate all calls to non-synthesis system taks
 	if ((type == AST_FCALL || type == AST_TCALL) && (str == "$display" || str == "$stop" || str == "$finish")) {
@@ -366,9 +374,18 @@ bool AstNode::simplify(bool const_fold, bool at_zero, bool in_lvalue, int stage,
 		if (type == AST_REPLICATE)
 			while (children[0]->simplify(true, false, in_lvalue, stage, -1, false, true) == true)
 				did_something = true;
-		for (auto child : children)
+		for (auto child : children) {
+log_ping();
+			static int trace_counter = 0;
+			log("--> %d\n", ++trace_counter);
+			if (trace_counter == 70) {
+				child->dumpAst(NULL, "> ");
+				EM_ASM(console.log("BRACE FOR IMPACT!"));
+			}
 			while (!child->basic_prep && child->simplify(false, false, in_lvalue, stage, -1, false, in_param) == true)
 				did_something = true;
+log_ping();
+		}
 		detectSignWidth(width_hint, sign_hint);
 	}
 
@@ -2021,6 +2038,7 @@ apply_newNode:
 	if (!did_something)
 		basic_prep = true;
 
+	recursion_counter--;
 	return did_something;
 }
 

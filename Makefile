@@ -86,7 +86,16 @@ else ifeq ($(CONFIG),emcc)
 CXX = emcc
 CXXFLAGS += -std=c++11 -Os -Wno-warn-absolute-paths
 CXXFLAGS := $(filter-out -ggdb,$(CXXFLAGS))
-EXE = .html
+EMCCFLAGS := -s ALLOW_MEMORY_GROWTH=1
+EMCCFLAGS += -s DISABLE_EXCEPTION_CATCHING=0
+# EMCCFLAGS += -s ASSERTIONS=2
+# EMCCFLAGS += -s SAFE_HEAP=1
+# EMCCFLAGS += -s RELOOP=0
+# EMCCFLAGS += -g4
+CXXFLAGS += $(EMCCFLAGS)
+LDFLAGS += $(EMCCFLAGS)
+# EXE = .html
+EXE = .js
 
 else ifeq ($(CONFIG),mxe)
 CXX = /usr/local/src/mxe/usr/bin/i686-pc-mingw32-gcc
