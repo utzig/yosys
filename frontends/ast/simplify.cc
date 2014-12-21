@@ -50,12 +50,19 @@ using namespace AST_INTERNAL;
 // nodes that link to a different node using names and lexical scoping.
 bool AstNode::simplify(bool const_fold, bool at_zero, bool in_lvalue, int stage, int width_hint, bool sign_hint, bool in_param)
 {
+	EM_ASM(console.log("--> enter"));
+	EM_ASM(
+		var i = 0;
+		function stackExplorer() { i++; stackExplorer(); }
+		try { stackExplorer(); } catch (e) { console.log("--> free stack: " + i); }
+	);
+
 	AstNode *newNode = NULL;
 	bool did_something = false;
 	static int recursion_counter = 0;
 
 	recursion_counter++;
-	log("AST simplify[%d] depth %d at %s:%d.\n", stage, recursion_counter, filename.c_str(), linenum);
+	log("AST simplify[%d] depth %d at %s:%d,\n", stage, recursion_counter, filename.c_str(), linenum);
 
 #if 0
 	log("-------------\n");
@@ -148,6 +155,7 @@ bool AstNode::simplify(bool const_fold, bool at_zero, bool in_lvalue, int stage,
 		}
 
 		while (simplify(const_fold, at_zero, in_lvalue, 2, width_hint, sign_hint, in_param)) { }
+		EM_ASM(console.log("--> leave"));
 		recursion_counter--;
 		return false;
 	}
@@ -158,6 +166,7 @@ bool AstNode::simplify(bool const_fold, bool at_zero, bool in_lvalue, int stage,
 	// we do not look inside a task or function
 	// (but as soon as a task of function is instanciated we process the generated AST as usual)
 	if (type == AST_FUNCTION || type == AST_TASK) {
+		EM_ASM(console.log("--> leave"));
 		recursion_counter--;
 		return false;
 	}
@@ -375,16 +384,21 @@ bool AstNode::simplify(bool const_fold, bool at_zero, bool in_lvalue, int stage,
 			while (children[0]->simplify(true, false, in_lvalue, stage, -1, false, true) == true)
 				did_something = true;
 		for (auto child : children) {
-log_ping();
 			static int trace_counter = 0;
 			log("--> %d\n", ++trace_counter);
 			if (trace_counter == 70) {
 				child->dumpAst(NULL, "> ");
-				EM_ASM(console.log("BRACE FOR IMPACT!"));
+				EM_ASM(console.log((new Error).stack));
 			}
-			while (!child->basic_prep && child->simplify(false, false, in_lvalue, stage, -1, false, in_param) == true)
+			while (1) {
+				if (child->basic_prep)
+					break;
+				if (trace_counter == 70) EM_ASM(console.log("--> Boom!"));
+				if (!child->simplify(false, false, in_lvalue, stage, -1, false, in_param))
+					break;
+				if (trace_counter == 70) EM_ASM(console.log("--> never."));
 				did_something = true;
-log_ping();
+			}
 		}
 		detectSignWidth(width_hint, sign_hint);
 	}
@@ -2038,6 +2052,7 @@ apply_newNode:
 	if (!did_something)
 		basic_prep = true;
 
+	EM_ASM(console.log("--> leave"));
 	recursion_counter--;
 	return did_something;
 }
